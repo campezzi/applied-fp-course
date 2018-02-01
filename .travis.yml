@@ -143,6 +143,9 @@ before_install:
 # Using compiler above sets CC to an invalid value, so unset it
 - unset CC
 
+# Store the list of levels
+- LEVELS=$(ls -1d level*)
+
 # We want to always allow newer versions of packages when building on GHC HEAD
 - CABALARGS=""
 - if [ "x$GHCVER" = "xhead" ]; then CABALARGS=--allow-newer; fi
@@ -175,13 +178,18 @@ install:
   set -ex
   case "$BUILD" in
     stack)
-      # Add in extra-deps for older snapshots, as necessary
-      stack --no-terminal --install-ghc $ARGS test --bench --dry-run || ( \
-        stack --no-terminal $ARGS build cabal-install && \
-        stack --no-terminal $ARGS solver --update-config)
+      for lvl in $LEVELS
+      do
+        cd $lvl
+        # Add in extra-deps for older snapshots, as necessary
+        stack --no-terminal --install-ghc $ARGS test --bench --dry-run || ( \
+          stack --no-terminal $ARGS build cabal-install && \
+          stack --no-terminal $ARGS solver --update-config)
 
-      # Build the dependencies
-      stack --no-terminal --install-ghc $ARGS test --bench --only-dependencies
+        # Build the dependencies
+        stack --no-terminal --install-ghc $ARGS test --bench --only-dependencies
+        cd ..
+      done
       ;;
     cabal)
       cabal --version
@@ -202,10 +210,15 @@ script:
   set -ex
   case "$BUILD" in
     stack)
-      stack --no-terminal $ARGS test --bench --no-run-benchmarks --haddock --no-haddock-deps
+      for lvl in $LEVELS
+      do
+        cd $lvl
+        stack --no-terminal $ARGS test --bench --no-run-benchmarks --haddock --no-haddock-deps
+        cd ..
+      done
       ;;
     cabal)
-      cabal install --project-file="cabal.project" --enable-tests --enable-benchmarks --force-reinstalls --ghc-options=-O0 --reorder-goals --max-backjumps=-1 $CABALARGS $PACKAGES
+      # cabal install --project-file="cabal.project" --enable-tests --enable-benchmarks --force-reinstalls --ghc-options=-O0 --reorder-goals --max-backjumps=-1 $CABALARGS $PACKAGES
 
       ORIGDIR=$(pwd)
       for dir in $PACKAGES
